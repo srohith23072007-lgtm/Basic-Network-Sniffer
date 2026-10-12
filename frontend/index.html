@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Basic Network Sniffer - Live Traffic Analyzer</title>
+  <meta name="description" content="A beginner-friendly educational network packet sniffer built with Python, Scapy, and Flask.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Basic Network Sniffer</h1>
+          <p class="brand-subtitle">Educational Packet Analysis & Traffic Monitor</p>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div id="statusIndicator" class="status-badge status-idle">
+          <span class="status-dot"></span>
+          <span id="statusText">Status: Idle</span>
+        </div>
+        <div id="uptimeDisplay" class="uptime-badge" style="display: none;">
+          Uptime: <span id="uptimeSeconds">0</span>s
+        </div>
+      </div>
+    </header>
+
+    <!-- Error/Notice Banner -->
+    <div id="alertBanner" class="alert-banner" style="display: none;">
+      <div class="alert-content">
+        <svg class="alert-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span id="alertMessage">An error occurred</span>
+      </div>
+      <button id="alertCloseBtn" class="alert-close" aria-label="Dismiss alert">&times;</button>
+    </div>
+
+    <!-- Control Toolbar -->
+    <section class="toolbar-section">
+      <div class="control-group">
+        <label for="interfaceSelect" class="control-label">Network Interface</label>
+        <div class="select-wrapper">
+          <select id="interfaceSelect" class="custom-select">
+            <option value="default">Loading interfaces...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="protocolFilterSelect" class="control-label">Capture Filter</label>
+        <div class="select-wrapper">
+          <select id="protocolFilterSelect" class="custom-select">
+            <option value="all">All Protocols</option>
+            <option value="tcp">TCP Only</option>
+            <option value="udp">UDP Only</option>
+            <option value="icmp">ICMP Only</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button id="startBtn" class="btn btn-primary" title="Start packet capture">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          Start Capture
+        </button>
+
+        <button id="stopBtn" class="btn btn-danger" disabled title="Stop packet capture">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="6" width="12" height="12"></rect>
+          </svg>
+          Stop Capture
+        </button>
+
+        <button id="clearBtn" class="btn btn-secondary" title="Clear current buffer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          Clear
+        </button>
+
+        <button id="exportBtn" class="btn btn-outline" title="Export captured packets to CSV">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export CSV
+        </button>
+      </div>
+    </section>
+
+    <!-- Metrics Cards Grid -->
+    <section class="metrics-grid">
+      <div class="metric-card metric-total">
+        <div class="metric-header">
+          <span class="metric-title">Total Packets</span>
+          <span class="metric-icon">📦</span>
+        </div>
+        <div class="metric-value" id="statTotal">0</div>
+        <div class="metric-subtext" id="statRate">0 pkts/sec</div>
+      </div>
+
+      <div class="metric-card metric-tcp">
+        <div class="metric-header">
+          <span class="metric-title">TCP</span>
+          <span class="metric-tag tag-tcp">Stream</span>
+        </div>
+        <div class="metric-value" id="statTcp">0</div>
+        <div class="metric-subtext" id="statTcpPct">0% of total</div>
+      </div>
+
+      <div class="metric-card metric-udp">
+        <div class="metric-header">
+          <span class="metric-title">UDP</span>
+          <span class="metric-tag tag-udp">Datagram</span>
+        </div>
+        <div class="metric-value" id="statUdp">0</div>
+        <div class="metric-subtext" id="statUdpPct">0% of total</div>
+      </div>
+
+      <div class="metric-card metric-icmp">
+        <div class="metric-header">
+          <span class="metric-title">ICMP</span>
+          <span class="metric-tag tag-icmp">Control</span>
+        </div>
+        <div class="metric-value" id="statIcmp">0</div>
+        <div class="metric-subtext" id="statIcmpPct">0% of total</div>
+      </div>
+
+      <div class="metric-card metric-bytes">
+        <div class="metric-header">
+          <span class="metric-title">Data Volume</span>
+          <span class="metric-icon">📊</span>
+        </div>
+        <div class="metric-value" id="statBytes">0 KB</div>
+        <div class="metric-subtext" id="statOther">Other: 0 pkts</div>
+      </div>
+    </section>
+
+    <!-- Main Table Section -->
+    <main class="table-section">
+      <div class="table-controls">
+        <div class="search-box">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="searchInput" placeholder="Filter by IP, port, protocol, or info..." class="search-input">
+          <button id="clearSearchBtn" class="clear-search" style="display: none;">&times;</button>
+        </div>
+
+        <div class="table-actions">
+          <label class="toggle-control">
+            <input type="checkbox" id="autoScrollToggle" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Auto-scroll</span>
+          </label>
+          <span class="showing-count" id="showingCount">Showing: 0 packets</span>
+        </div>
+      </div>
+
+      <!-- Packet Table Container -->
+      <div class="table-wrapper" id="tableContainer">
+        <table class="packet-table" id="packetTable">
+          <thead>
+            <tr>
+              <th style="width: 60px;">#</th>
+              <th style="width: 110px;">Time</th>
+              <th style="width: 80px;">Protocol</th>
+              <th style="width: 170px;">Source</th>
+              <th style="width: 170px;">Destination</th>
+              <th style="width: 85px;">Length</th>
+              <th>Packet Summary / Info</th>
+              <th style="width: 160px;">Payload Preview</th>
+            </tr>
+          </thead>
+          <tbody id="packetTableBody">
+            <tr class="empty-row" id="emptyStateRow">
+              <td colspan="8">
+                <div class="empty-state">
+                  <div class="empty-icon">📡</div>
+                  <p class="empty-title">Ready to Capture</p>
+                  <p class="empty-desc">Choose a network interface above and click <strong>Start Capture</strong> to begin monitoring packets.</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- Packet Details Modal -->
+    <div id="packetModal" class="modal-overlay" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <h2 class="modal-title" id="modalTitle">Packet #1 Details</h2>
+            <span id="modalProtocolBadge" class="protocol-badge">TCP</span>
+          </div>
+          <button id="modalCloseBtn" class="modal-close" aria-label="Close modal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="details-section">
+            <h3 class="section-title">General Metadata</h3>
+            <div class="details-grid" id="modalGeneralGrid">
+              <!-- Populated via script -->
+            </div>
+          </div>
+
+          <div class="details-section">
+            <h3 class="section-title">Protocol Headers</h3>
+            <div class="details-grid" id="modalHeaderGrid">
+              <!-- Populated via script -->
+            </div>
+          </div>
+
+          <div class="details-section">
+            <h3 class="section-title">Payload Preview (ASCII)</h3>
+            <pre class="code-block" id="modalPayloadAscii">No payload attached</pre>
+          </div>
+
+          <div class="details-section">
+            <h3 class="section-title">Hex Dump</h3>
+            <pre class="code-block hex-block" id="modalPayloadHex">No raw bytes available</pre>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="modalCloseBtnFooter" class="btn btn-secondary">Close Inspector</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Educational Footer -->
+    <footer class="app-footer">
+      <div class="footer-note">
+        <strong>Security & Legal Notice:</strong> This tool is created for educational and authorized network diagnostics only. Always obtain explicit permission before monitoring any network traffic.
+      </div>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
